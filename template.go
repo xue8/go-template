@@ -51,12 +51,16 @@ func (t *Template) ParseJSON(text string, data interface{}) ([]byte, error) {
 		return nil, err
 	}
 	if m, ok := data.(map[string]interface{}); ok {
-		for k, v := range m {
+		for key, value := range m {
+			if _, ok = value.(string); ok {
+				//m[key] = strconv.QuoteToASCII(v)
+				continue
+			}
 			var vBytes []byte
-			if vBytes, err = json.Marshal(v); err != nil {
+			if vBytes, err = json.Marshal(value); err != nil {
 				return nil, err
 			}
-			m[k] = string(vBytes)
+			m[key] = string(vBytes)
 		}
 	}
 	if 	_, err = t.template.Parse(text); err != nil {
@@ -71,10 +75,13 @@ func (t *Template) ParseJSON(text string, data interface{}) ([]byte, error) {
 
 func (t *Template) trim(text string) (string, error) {
 	var err error
-	if text, err = t.convertDot(text); err != nil {
+	if text, err = t.trimSpace(text); err != nil {
 		return "", err
 	}
 	if text, err = t.trimMark(text); err != nil {
+		return "", err
+	}
+	if text, err = t.convertDot(text); err != nil {
 		return "", err
 	}
 	return text, nil
@@ -86,16 +93,29 @@ func (t *Template) convertDot(text string) (string, error) {
 		return "", err
 	}
 	return reg.ReplaceAllStringFunc(text, func(s string) string {
-		return strings.ReplaceAll(s, ".", "")
+		tmp := []byte(s)
+		dot := []byte(".")
+		tmp = append(tmp[:2], append(dot, tmp[2:]...)...)
+		return string(tmp)
 	}), nil
 }
 
 func (t *Template) trimMark(text string) (string, error) {
-	reg, err := regexp.Compile("\"" + t.left + ".*?" + t.right + "\"")
+	reg, err := regexp.Compile("\"" + t.left + "-.*?-" + t.right + "\"")
 	if  err != nil {
 		return "", err
 	}
 	return reg.ReplaceAllStringFunc(text, func(s string) string {
 		return strings.ReplaceAll(strings.ReplaceAll(s, "\"", ""), "-", "")
+	}), nil
+}
+
+func (t *Template) trimSpace(text string) (string, error) {
+	reg, err := regexp.Compile(t.left + ".*?" + t.right)
+	if  err != nil {
+		return "", err
+	}
+	return reg.ReplaceAllStringFunc(text, func(s string) string {
+		return strings.ReplaceAll(s, " ", "")
 	}), nil
 }
